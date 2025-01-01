@@ -199,6 +199,75 @@ event_loop(struct scrcpy *s) {
                 if (!sc_screen_handle_event(&s->screen, &event)) {
                     return SCRCPY_EXIT_FAILURE;
                 }
+                
+                // 터치 이벤트 로깅
+                if (event.type == SDL_FINGERDOWN || 
+                    event.type == SDL_FINGERUP || 
+                    event.type == SDL_FINGERMOTION) {
+                    const char *event_type = 
+                        event.type == SDL_FINGERDOWN ? "Touch Down" :
+                        event.type == SDL_FINGERUP ? "Touch Up" : "Touch Move";
+                    
+                    int window_width, window_height;
+                    SDL_GetWindowSize(s->screen.window, &window_width, &window_height);
+                    int x = (int)(event.tfinger.x * window_width);
+                    int y = (int)(event.tfinger.y * window_height);
+                    
+                    LOGI("Touch Event: %s (x=%d, y=%d)", event_type, x, y);
+                }
+                
+                // 키보드 이벤트 로깅
+                else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+                    const char *event_type = 
+                        event.type == SDL_KEYDOWN ? "Key Down" : "Key Up";
+                    
+                    // SDL_GetKeyName()으로 키 이름 가져오기
+                    const char *key_name = SDL_GetKeyName(event.key.keysym.sym);
+                    
+                    // 수정자 키 상태 확인 (Ctrl, Shift, Alt)
+                    SDL_Keymod mod = event.key.keysym.mod;
+                    bool ctrl = mod & (KMOD_LCTRL | KMOD_RCTRL);
+                    bool shift = mod & (KMOD_LSHIFT | KMOD_RSHIFT);
+                    bool alt = mod & (KMOD_LALT | KMOD_RALT);
+                    
+                    LOGI("KeyBoard Event: %s (Key=%s%s%s%s)", 
+                         event_type, 
+                         ctrl ? "Ctrl+" : "",
+                         shift ? "Shift+" : "",
+                         alt ? "Alt+" : "",
+                         key_name);
+                }
+                
+                // 마우스 이벤트 로깅
+                else if (event.type == SDL_MOUSEBUTTONDOWN || 
+                         event.type == SDL_MOUSEBUTTONUP ||
+                         event.type == SDL_MOUSEMOTION) {
+                    const char *event_type;
+                    if (event.type == SDL_MOUSEBUTTONDOWN)
+                        event_type = "Mouse Button Down";
+                    else if (event.type == SDL_MOUSEBUTTONUP)
+                        event_type = "Mouse Button Up";
+                    else
+                        event_type = "Mouse Move";
+                    
+                    if (event.type == SDL_MOUSEBUTTONDOWN || 
+                        event.type == SDL_MOUSEBUTTONUP) {
+                        const char *button_name;
+                        switch (event.button.button) {
+                            case SDL_BUTTON_LEFT:   button_name = "LeftClick"; break;
+                            case SDL_BUTTON_MIDDLE: button_name = "MiddleClick"; break;
+                            case SDL_BUTTON_RIGHT:  button_name = "RightClick"; break;
+                            default:               button_name = "MiscClick"; break;
+                        }
+                        LOGI("Mouse Event: %s (%s x=%d, y=%d)", 
+                             event_type, button_name,
+                             event.button.x, event.button.y);
+                    } else {
+                        LOGI("Mouse Event: %s (x=%d, y=%d)", 
+                             event_type,
+                             event.motion.x, event.motion.y);
+                    }
+                }
                 break;
         }
     }
