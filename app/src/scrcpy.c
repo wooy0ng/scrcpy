@@ -181,7 +181,27 @@ event_loop(struct scrcpy *s) {
         }
     }
     
+    // 이벤트 재생 초기화
+    struct event_replayer replayer;
+    if (s->replay_mode) {
+        if (!event_replayer_init(&replayer, s->options.replay_file, s->screen.window)) {
+            return SCRCPY_EXIT_FAILURE;
+        }
+    }
+    
     while (SDL_WaitEvent(&event)) {
+        // 재생 모드일 때 이벤트 처리
+        if (s->replay_mode) {
+            if (!event_replayer_process(&replayer)) {
+                // break;   // 재생 완료
+                // 재생이 완료되면 일반 모드로 전환
+                s->replay_mode = false;
+                event_replayer_close(&replayer);
+                LOGI("Event replay completed, switching to normal mode");
+                continue;
+            }
+        }
+        
         // 이벤트 로깅
         if (!s->replay_mode && s->options.record_events) {
             event_logger_record(&s->logger, &event);
@@ -295,6 +315,10 @@ event_loop(struct scrcpy *s) {
     if (!s->replay_mode && s->options.record_events) {
         event_logger_close(&s->logger);
     }
+    
+    // if (s->replay_mode) {
+    //     event_replayer_close(&replayer);
+    // }
     
     return SCRCPY_EXIT_FAILURE;
 }
