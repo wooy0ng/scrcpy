@@ -111,6 +111,8 @@ enum {
     OPT_ANGLE,
     OPT_NO_VD_SYSTEM_DECORATIONS,
     OPT_NO_VD_DESTROY_CONTENT,
+    OPT_RECORD_EVENTS,
+    OPT_REPLAY,
 };
 
 struct sc_option {
@@ -1029,6 +1031,17 @@ static const struct sc_option options[] = {
         .argdesc = "value",
         .text = "Set the initial window height.\n"
                 "Default is 0 (automatic).",
+    },
+    {
+        .longopt_id = OPT_RECORD_EVENTS,
+        .longopt = "record-events",
+        .text = "Record input events to a file",
+    },
+    {
+        .longopt_id = OPT_REPLAY,
+        .longopt = "replay",
+        .argdesc = "file",
+        .text = "Replay recorded input events from a file",
     },
 };
 
@@ -2721,6 +2734,12 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             case OPT_NO_VD_SYSTEM_DECORATIONS:
                 opts->vd_system_decorations = false;
                 break;
+            case OPT_RECORD_EVENTS:
+                opts->record_events = true;
+                break;
+            case OPT_REPLAY:
+                opts->replay_file = optarg;
+                break;
             default:
                 // getopt prints the error message on stderr
                 return false;
@@ -3258,4 +3277,16 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
     }
 
     return ret;
+}
+
+static void
+print_events_option_help(void) {
+    printf("Events recording and replay:\n"
+           "\n"
+           "    --record-events\n"
+           "        Record input events to a file\n"
+           "\n"
+           "    --replay=<file>\n"
+           "        Replay recorded input events from a file\n"
+           "\n");
 }

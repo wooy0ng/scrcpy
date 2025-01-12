@@ -43,6 +43,7 @@
 #ifdef HAVE_V4L2
 # include "v4l2_sink.h"
 #endif
+#include "event_log.h"
 
 struct scrcpy {
     struct sc_server server;
@@ -88,6 +89,12 @@ struct scrcpy {
 #endif
     };
     struct sc_timeout timeout;
+    struct event_logger logger;
+    bool replay_mode;
+    struct {
+        bool record_events;  // 이벤트 기록 여부
+        const char *replay_file;  // 재생할 이벤트 파일 경로
+    } options;
 };
 
 #ifdef _WIN32
@@ -166,7 +173,20 @@ sdl_configure(bool video_playback, bool disable_screensaver) {
 static enum scrcpy_exit_code
 event_loop(struct scrcpy *s) {
     SDL_Event event;
+    
+    // 이벤트 로깅 초기화
+    if (!s->replay_mode && s->options.record_events) {
+        if (!event_logger_init(&s->logger, "event.log")) {
+            return SCRCPY_EXIT_FAILURE;
+        }
+    }
+    
     while (SDL_WaitEvent(&event)) {
+        // 이벤트 로깅
+        if (!s->replay_mode && s->options.record_events) {
+            event_logger_record(&s->logger, &event);
+        }
+        
         switch (event.type) {
             case SC_EVENT_DEVICE_DISCONNECTED:
                 LOGW("Device disconnected");
@@ -271,6 +291,11 @@ event_loop(struct scrcpy *s) {
                 break;
         }
     }
+    
+    if (!s->replay_mode && s->options.record_events) {
+        event_logger_close(&s->logger);
+    }
+    
     return SCRCPY_EXIT_FAILURE;
 }
 
@@ -442,6 +467,11 @@ scrcpy(struct scrcpy_options *options) {
     memset(&scrcpy, 42, sizeof(scrcpy));
 #endif
     struct scrcpy *s = &scrcpy;
+
+    // options 초기화
+    s->options.record_events = options->record_events;
+    s->options.replay_file = options->replay_file;
+    s->replay_mode = options->replay_file != NULL;
 
     // Minimal SDL initialization
     if (SDL_Init(SDL_INIT_EVENTS)) {

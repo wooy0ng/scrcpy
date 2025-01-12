@@ -312,6 +312,9 @@ struct scrcpy_options {
     const char *start_app;
     bool vd_destroy_content;
     bool vd_system_decorations;
+    // Event recording and replay
+    bool record_events;          // 이벤트 기록 여부
+    const char *replay_file;     // 재생할 이벤트 파일 경로
 };
 
 extern const struct scrcpy_options scrcpy_options_default;
