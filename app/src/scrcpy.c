@@ -189,16 +189,25 @@ event_loop(struct scrcpy *s) {
         }
     }
     
-    while (SDL_WaitEvent(&event)) {
-        // 재생 모드일 때 이벤트 처리
+    bool running = true;
+    while (running) {
+        // 재생 모드일 때는 이벤트를 기다리지 않고 즉시 처리
         if (s->replay_mode) {
             if (!event_replayer_process(&replayer)) {
-                // break;   // 재생 완료
-                // 재생이 완료되면 일반 모드로 전환
                 s->replay_mode = false;
                 event_replayer_close(&replayer);
                 LOGI("Event replay completed, switching to normal mode");
+            }
+            // 재생 중에도 SDL 이벤트를 처리 (종료 등을 위해)
+            if (!SDL_PollEvent(&event)) {
+                SDL_Delay(1); // CPU 사용량 감소
                 continue;
+            }
+        } else {
+            // 일반 모드에서는 이벤트를 기다림
+            if (!SDL_WaitEvent(&event)) {
+                LOGE("SDL_WaitEvent error: %s", SDL_GetError());
+                break;
             }
         }
         
@@ -211,24 +220,10 @@ event_loop(struct scrcpy *s) {
             case SC_EVENT_DEVICE_DISCONNECTED:
                 LOGW("Device disconnected");
                 return SCRCPY_EXIT_DISCONNECTED;
-            case SC_EVENT_DEMUXER_ERROR:
-                LOGE("Demuxer error");
-                return SCRCPY_EXIT_FAILURE;
-            case SC_EVENT_CONTROLLER_ERROR:
-                LOGE("Controller error");
-                return SCRCPY_EXIT_FAILURE;
-            case SC_EVENT_RECORDER_ERROR:
-                LOGE("Recorder error");
-                return SCRCPY_EXIT_FAILURE;
-            case SC_EVENT_AOA_OPEN_ERROR:
-                LOGE("AOA open error");
-                return SCRCPY_EXIT_FAILURE;
-            case SC_EVENT_TIME_LIMIT_REACHED:
-                LOGI("Time limit reached");
-                return SCRCPY_EXIT_SUCCESS;
             case SDL_QUIT:
                 LOGD("User requested to quit");
-                return SCRCPY_EXIT_SUCCESS;
+                running = false;
+                break;
             case SC_EVENT_RUN_ON_MAIN_THREAD: {
                 sc_runnable_fn run = event.user.data1;
                 void *userdata = event.user.data2;
@@ -316,11 +311,7 @@ event_loop(struct scrcpy *s) {
         event_logger_close(&s->logger);
     }
     
-    // if (s->replay_mode) {
-    //     event_replayer_close(&replayer);
-    // }
-    
-    return SCRCPY_EXIT_FAILURE;
+    return SCRCPY_EXIT_SUCCESS;
 }
 
 static void
