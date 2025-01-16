@@ -184,131 +184,66 @@ event_loop(struct scrcpy *s) {
     // 이벤트 재생 초기화
     struct event_replayer replayer;
     if (s->replay_mode) {
-        if (!event_replayer_init(&replayer, s->options.replay_file, s->screen.window)) {
+        if (!event_replayer_init(&replayer, s->options.replay_file, 
+                                s->screen.window)) {
             return SCRCPY_EXIT_FAILURE;
         }
     }
     
     bool running = true;
     while (running) {
-        // 재생 모드일 때는 이벤트를 기다리지 않고 즉시 처리
+        // 먼저 SDL 이벤트를 확인하여 종료 요청 처리
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_QUIT:
+                    LOGD("User requested to quit");
+                    running = false;
+                    goto end_loop;
+                case SC_EVENT_DEVICE_DISCONNECTED:
+                    LOGW("Device disconnected");
+                    running = false;
+                    goto end_loop;
+                default:
+                    if (!sc_screen_handle_event(&s->screen, &event)) {
+                        running = false;
+                        goto end_loop;
+                    }
+                    break;
+            }
+        }
+
         if (s->replay_mode) {
             if (!event_replayer_process(&replayer)) {
                 s->replay_mode = false;
                 event_replayer_close(&replayer);
-                LOGI("Event replay completed, switching to normal mode");
-            }
-            // 재생 중에도 SDL 이벤트를 처리 (종료 등을 위해)
-            if (!SDL_PollEvent(&event)) {
-                SDL_Delay(1); // CPU 사용량 감소
-                continue;
+                LOGI("Event replay completed");
             }
         } else {
             // 일반 모드에서는 이벤트를 기다림
-            if (!SDL_WaitEvent(&event)) {
-                LOGE("SDL_WaitEvent error: %s", SDL_GetError());
-                break;
+            if (!SDL_WaitEventTimeout(&event, 100)) { // 100ms 타임아웃 추가
+                continue;
             }
-        }
-        
-        // 이벤트 로깅
-        if (!s->replay_mode && s->options.record_events) {
-            event_logger_record(&s->logger, &event);
-        }
-        
-        switch (event.type) {
-            case SC_EVENT_DEVICE_DISCONNECTED:
-                LOGW("Device disconnected");
-                return SCRCPY_EXIT_DISCONNECTED;
-            case SDL_QUIT:
-                LOGD("User requested to quit");
+            
+            if (!s->replay_mode && s->options.record_events) {
+                event_logger_record(&s->logger, &event);
+            }
+            
+            if (!sc_screen_handle_event(&s->screen, &event)) {
                 running = false;
-                break;
-            case SC_EVENT_RUN_ON_MAIN_THREAD: {
-                sc_runnable_fn run = event.user.data1;
-                void *userdata = event.user.data2;
-                run(userdata);
-                break;
+                goto end_loop;
             }
-            default:
-                if (!sc_screen_handle_event(&s->screen, &event)) {
-                    return SCRCPY_EXIT_FAILURE;
-                }
-                
-                // 터치 이벤트 로깅
-                if (event.type == SDL_FINGERDOWN || 
-                    event.type == SDL_FINGERUP || 
-                    event.type == SDL_FINGERMOTION) {
-                    const char *event_type = 
-                        event.type == SDL_FINGERDOWN ? "Touch Down" :
-                        event.type == SDL_FINGERUP ? "Touch Up" : "Touch Move";
-                    
-                    int window_width, window_height;
-                    SDL_GetWindowSize(s->screen.window, &window_width, &window_height);
-                    int x = (int)(event.tfinger.x * window_width);
-                    int y = (int)(event.tfinger.y * window_height);
-                    
-                    LOGI("Touch Event: %s (x=%d, y=%d)", event_type, x, y);
-                }
-                
-                // 키보드 이벤트 로깅
-                else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-                    const char *event_type = 
-                        event.type == SDL_KEYDOWN ? "Key Down" : "Key Up";
-                    
-                    // SDL_GetKeyName()으로 키 이름 가져오기
-                    const char *key_name = SDL_GetKeyName(event.key.keysym.sym);
-                    
-                    // 수정자 키 상태 확인 (Ctrl, Shift, Alt)
-                    SDL_Keymod mod = event.key.keysym.mod;
-                    bool ctrl = mod & (KMOD_LCTRL | KMOD_RCTRL);
-                    bool shift = mod & (KMOD_LSHIFT | KMOD_RSHIFT);
-                    bool alt = mod & (KMOD_LALT | KMOD_RALT);
-                    
-                    LOGI("KeyBoard Event: %s (Key=%s%s%s%s)", 
-                         event_type, 
-                         ctrl ? "Ctrl+" : "",
-                         shift ? "Shift+" : "",
-                         alt ? "Alt+" : "",
-                         key_name);
-                }
-                
-                // 마우스 이벤트 로깅
-                else if (event.type == SDL_MOUSEBUTTONDOWN || 
-                         event.type == SDL_MOUSEBUTTONUP ||
-                         event.type == SDL_MOUSEMOTION) {
-                    const char *event_type;
-                    if (event.type == SDL_MOUSEBUTTONDOWN)
-                        event_type = "Mouse Button Down";
-                    else if (event.type == SDL_MOUSEBUTTONUP)
-                        event_type = "Mouse Button Up";
-                    else
-                        event_type = "Mouse Move";
-                    
-                    if (event.type == SDL_MOUSEBUTTONDOWN || 
-                        event.type == SDL_MOUSEBUTTONUP) {
-                        const char *button_name;
-                        switch (event.button.button) {
-                            case SDL_BUTTON_LEFT:   button_name = "LeftClick"; break;
-                            case SDL_BUTTON_MIDDLE: button_name = "MiddleClick"; break;
-                            case SDL_BUTTON_RIGHT:  button_name = "RightClick"; break;
-                            default:               button_name = "MiscClick"; break;
-                        }
-                        LOGI("Mouse Event: %s (%s x=%d, y=%d)", 
-                             event_type, button_name,
-                             event.button.x, event.button.y);
-                    } else {
-                        LOGI("Mouse Event: %s (x=%d, y=%d)", 
-                             event_type,
-                             event.motion.x, event.motion.y);
-                    }
-                }
-                break;
         }
+        
+        SDL_Delay(1); // CPU 사용량 최적화
     }
-    
+
+end_loop:
     if (!s->replay_mode && s->options.record_events) {
         event_logger_close(&s->logger);
+    }
+    
+    if (s->replay_mode) {
+        event_replayer_close(&replayer);
     }
     
     return SCRCPY_EXIT_SUCCESS;

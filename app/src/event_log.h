@@ -5,46 +5,62 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-// 이벤트 타입 열거형 추가
-enum event_type {
-    EVENT_MOUSE_MOTION,
-    EVENT_MOUSE_DOWN,
-    EVENT_MOUSE_UP,
-    EVENT_KEY_DOWN,
-    EVENT_KEY_UP,
-    EVENT_FINGER_DOWN,
-    EVENT_FINGER_UP,
-    EVENT_FINGER_MOTION
+#define MAX_QUEUED_EVENTS 128
+#define EVENT_BUFFER_SIZE 64
+
+struct queued_event {
+    SDL_Event event;
+    Uint64 timestamp;  // 고해상도 타임스탬프
 };
 
-struct event_log_entry {
-    Uint32 timestamp;
-    enum event_type type;
-    int x;
-    int y;
-    int code;      // button, key, or finger id
-    int modifiers;
+struct event_queue {
+    struct queued_event events[MAX_QUEUED_EVENTS];
+    int head;
+    int tail;
+    int count;
+};
+
+struct event_entry {
+    Uint64 timestamp;
+    char text[256];
+};
+
+struct event_buffer {
+    struct event_entry entries[EVENT_BUFFER_SIZE];
+    int count;
 };
 
 struct event_logger {
     FILE *log_file;
-    Uint32 start_time;
+    Uint64 start_time;  // 고해상도 타임스탬프로 변경
+    double time_scale;  // 성능 카운터를 초 단위로 변환하기 위한 스케일
     bool is_recording;
+    struct event_buffer *buffer;
+    int event_count;
+    // 마지막 이벤트 정보 저장
+    struct {
+        Uint64 timestamp;
+        int x;
+        int y;
+        int type;
+        int code;
+    } last_event;
+    Uint64 last_timestamp;  // 추가: 마지막으로 기록된 타임스탬프
 };
 
 struct event_replayer {
     FILE *log_file;
-    Uint32 start_time;
+    SDL_Window *window;
+    Uint64 start_time;  // 고해상도 타임스탬프로 변경
+    double time_scale;  // 성능 카운터를 초 단위로 변환하기 위한 스케일
     bool is_replaying;
-    SDL_Window *window;  // 좌표 변환을 위해 필요
+    struct event_queue queue;  // 이벤트 큐 추가
 };
 
-// 기존 함수들
 bool event_logger_init(struct event_logger *logger, const char *filename);
 void event_logger_record(struct event_logger *logger, const SDL_Event *event);
 void event_logger_close(struct event_logger *logger);
 
-// 재생 관련 함수들 추가
 bool event_replayer_init(struct event_replayer *replayer, const char *filename, SDL_Window *window);
 bool event_replayer_process(struct event_replayer *replayer);
 void event_replayer_close(struct event_replayer *replayer);
