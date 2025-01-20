@@ -103,11 +103,8 @@ void event_logger_record(struct event_logger *logger, const SDL_Event *event) {
             }
         } else if (event->type == SDL_MOUSEBUTTONDOWN ||
                    event->type == SDL_MOUSEBUTTONUP) {
-            if (event->button.x == logger->last_event.x &&
-                event->button.y == logger->last_event.y &&
-                timestamp - logger->last_event.timestamp < 20000) {  // 20ms
-                return;
-            }
+            // 마우스 버튼 이벤트는 중복 필터링 제거
+            // 모든 DOWN/UP 이벤트를 반드시 기록해야 함
         } else if (event->type == SDL_KEYDOWN ||
                    event->type == SDL_KEYUP) {
             // 키보드 이벤트는 같은 키의 연속 입력만 필터링
@@ -129,7 +126,14 @@ void event_logger_record(struct event_logger *logger, const SDL_Event *event) {
                 timestamp,
                 event->type == SDL_MOUSEBUTTONDOWN ? "DOWN" : "UP",
                 event->button.x, event->button.y,
-                event->button.button, 0);
+                event->button.button, 
+                event->button.state);  // 상태 정보도 기록
+            
+            LOGD("Recording mouse button event: type=%s, x=%d, y=%d, button=%d, state=%d",
+                 event->type == SDL_MOUSEBUTTONDOWN ? "DOWN" : "UP",
+                 event->button.x, event->button.y,
+                 event->button.button,
+                 event->button.state);
             break;
             
         case SDL_MOUSEMOTION:
