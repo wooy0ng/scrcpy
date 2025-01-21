@@ -125,9 +125,9 @@ void event_logger_record(struct event_logger *logger, const SDL_Event *event) {
                 "%llu MOUSE_%s %d %d %d 0x%x\n",
                 timestamp,
                 event->type == SDL_MOUSEBUTTONDOWN ? "DOWN" : "UP",
-                event->button.x, event->button.y,
-                event->button.button, 
-                event->button.state);  // 상태 정보도 기록
+                event->button.x, event->button.y,       // 마우스 클릭 x, y 좌표
+                event->button.button,                   // 마우스 버튼 정보 (1: 좌클릭, 2: 중간, 3: 우클릭)
+                event->button.state);                   // 상태 정보 기록 (SDL_PRESSED: 누름, SDL_RELEASED: 뗌)
             
             LOGD("Recording mouse button event: type=%s, x=%d, y=%d, button=%d, state=%d",
                  event->type == SDL_MOUSEBUTTONDOWN ? "DOWN" : "UP",
@@ -141,6 +141,12 @@ void event_logger_record(struct event_logger *logger, const SDL_Event *event) {
                 "%llu MOUSE_MOTION %d %d 0 0x%x\n",
                 timestamp,
                 event->motion.x, event->motion.y, 0);
+            
+            // 마우스 현재 위치 (x, y)
+            // 마우스 상대적 이동량 (xrel, yrel)
+            LOGD("Recording mouse motion event: x=%d, y=%d, xrel=%d, yrel=%d",
+                 event->motion.x, event->motion.y,
+                 event->motion.xrel, event->motion.yrel);
             break;
             
         case SDL_KEYDOWN:
