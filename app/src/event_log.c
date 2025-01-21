@@ -25,6 +25,11 @@ static bool is_duplicate_event(struct event_logger *logger,
                              const char *type,
                              int x, int y, 
                              int code) {
+    // MOUSE_DOWN/UP 이벤트는 중복 체크에서 제외
+    if (strstr(type, "MOUSE_DOWN") || strstr(type, "MOUSE_UP")) {
+        return false;
+    }
+    
     // 20ms 이내의 동일한 위치의 동일한 타입 이벤트는 중복으로 처리
     if (timestamp - logger->last_event.timestamp < 20000 &&  // 20ms
         logger->last_event.x == x &&
